@@ -2,7 +2,7 @@ import { SocksProxyAgent } from "socks-proxy-agent"
 import fetch from "node-fetch"
 
 // 按稳定性排序，2.5-flash 最不稳定但质量好，2.0-flash 最稳定
-const MODELS = ["gemini-2.0-flash-lite", "gemini-2.0-flash", "gemini-2.5-flash"]
+const MODELS = ["gemini-2.5-flash", "gemini-2.5-pro"]
 const API_KEY = process.env.GEMINI_API_KEY || ""
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
@@ -55,9 +55,9 @@ export async function generateWithGemini(prompt: string): Promise<string> {
 
   let lastError = ""
 
-  // 依次尝试每个模型，每个最多重试2次
+  // 依次尝试每个模型，每个最多重试4次，间隔递增
   for (const model of MODELS) {
-    for (let attempt = 0; attempt < 2; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       try {
         const text = await tryModel(model, prompt)
         return text
@@ -65,7 +65,7 @@ export async function generateWithGemini(prompt: string): Promise<string> {
         lastError = err.message
         // 503=拥堵，429=限流，这些值得重试
         if (err.message.includes("503") || err.message.includes("429")) {
-          await sleep(1500 * (attempt + 1))
+          await sleep(5000 * (attempt + 1))
           continue
         }
         // 其他错误不重试当前模型，直接试下一个
