@@ -2,7 +2,7 @@ import { SocksProxyAgent } from "socks-proxy-agent"
 import fetch from "node-fetch"
 
 // 按稳定性排序，2.5-flash 最不稳定但质量好，2.0-flash 最稳定
-const MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
+const MODELS = ["gemini-1.5-flash"]
 const API_KEY = process.env.GEMINI_API_KEY || ""
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
