@@ -66,4 +66,3 @@ export const TYPE_GUIDES: Record<string, string> = {
 — 站在过来人角度提醒，点到为止`,
 
 }
-}
