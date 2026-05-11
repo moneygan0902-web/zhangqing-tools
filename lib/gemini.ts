@@ -1,12 +1,17 @@
 import { SocksProxyAgent } from "socks-proxy-agent"
 import fetch from "node-fetch"
 
-const MODEL = "gemini-2.5-flash"
+// 按稳定性排序，2.5-flash 最不稳定但质量好，2.0-flash 最稳定
+const MODELS = ["gemini-2.0-flash", "gemini-2.5-flash"]
 const API_KEY = process.env.GEMINI_API_KEY || ""
 const BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 
 const isDev = process.env.NODE_ENV !== "production"
 const proxyAgent = isDev ? new SocksProxyAgent("socks5://127.0.0.1:10808") : null
+
+function sleep(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
 
 async function apiFetch(url: string, body: any): Promise<any> {
   const options: any = {
@@ -25,13 +30,9 @@ async function apiFetch(url: string, body: any): Promise<any> {
   return res.json()
 }
 
-export async function generateWithGemini(prompt: string): Promise<string> {
-  if (!API_KEY) {
-    throw new Error("请在环境变量中设置 GEMINI_API_KEY")
-  }
-
+async function tryModel(model: string, prompt: string): Promise<string> {
   const data = await apiFetch(
-    `${BASE_URL}/models/${MODEL}:generateContent?key=${API_KEY}`,
+    `${BASE_URL}/models/${model}:generateContent?key=${API_KEY}`,
     {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
@@ -40,13 +41,42 @@ export async function generateWithGemini(prompt: string): Promise<string> {
       },
     }
   )
-
   const text = data.candidates?.[0]?.content?.parts?.[0]?.text
   if (!text) {
-    throw new Error("Gemini 返回了空内容，请重试")
+    throw new Error(`${model} 返回了空内容`)
+  }
+  return text
+}
+
+export async function generateWithGemini(prompt: string): Promise<string> {
+  if (!API_KEY) {
+    throw new Error("请在环境变量中设置 GEMINI_API_KEY")
   }
 
-  return text
+  let lastError = ""
+
+  // 依次尝试每个模型，每个最多重试2次
+  for (const model of MODELS) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        const text = await tryModel(model, prompt)
+        return text
+      } catch (err: any) {
+        lastError = err.message
+        // 503=拥堵，429=限流，这些值得重试
+        if (err.message.includes("503") || err.message.includes("429")) {
+          await sleep(1500 * (attempt + 1))
+          continue
+        }
+        // 其他错误不重试当前模型，直接试下一个
+        break
+      }
+    }
+  }
+
+  throw new Error(
+    `所有模型暂时不可用，请稍后重试。${lastError ? ` (${lastError})` : ""}`
+  )
 }
 
 export function sanitizeScript(script: string): string {
