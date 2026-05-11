@@ -37,7 +37,7 @@ async function tryModel(model: string, prompt: string): Promise<string> {
       contents: [{ parts: [{ text: prompt }] }],
       generationConfig: {
         temperature: 0.7,
-        maxOutputTokens: 4096,
+        maxOutputTokens: 1024,
       },
     }
   )
@@ -80,7 +80,14 @@ export async function generateWithGemini(prompt: string): Promise<string> {
 }
 
 export function sanitizeScript(script: string): string {
-  let cleaned = script.replace(/\n{3,}/g, "\n\n")
+  let cleaned = script
+    // 去掉Markdown标题标记
+    .replace(/^#{1,6}\s*/gm, "")
+    // 去掉加粗/斜体
+    .replace(/\*{1,3}/g, "")
+    .replace(/_{1,3}/g, "")
+    // 去掉多余空行
+    .replace(/\n{3,}/g, "\n\n")
   if (!cleaned.includes("缘分") && !cleaned.includes("私信")) {
     cleaned += `\n\n我是张清，在武汉做了十几年红娘。如果你想找人聊聊，私信我"缘分"。`
   }
