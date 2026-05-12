@@ -18,6 +18,33 @@ const CLASSIFY_PROMPT = `你是一个内容分类助手。分析以下婚恋/相
 严格输出JSON格式，不要有其他文字：
 {"type":"故事型","title":"...","summary":"...","sourceAuthor":"..."}`
 
+function extractJson(raw: string): any {
+  // 1. 尝试从 markdown 代码块中提取
+  const codeBlock = raw.match(/```(?:json)?\s*([\s\S]*?)```/)
+  if (codeBlock) {
+    try { return JSON.parse(codeBlock[1].trim()) } catch {}
+  }
+
+  // 2. 尝试匹配最外层 JSON 对象
+  const jsonMatch = raw.match(/\{[\s\S]*\}/)
+  if (jsonMatch) {
+    let jsonStr = jsonMatch[0]
+    // 清理常见问题：尾部逗号、换行中的非法字符
+    jsonStr = jsonStr.replace(/,\s*}/g, "}")
+    try { return JSON.parse(jsonStr) } catch {}
+  }
+
+  // 3. 最后尝试：找到第一个 { 到最后一个 }
+  const firstBrace = raw.indexOf("{")
+  const lastBrace = raw.lastIndexOf("}")
+  if (firstBrace >= 0 && lastBrace > firstBrace) {
+    const jsonStr = raw.slice(firstBrace, lastBrace + 1)
+    try { return JSON.parse(jsonStr) } catch {}
+  }
+
+  return null
+}
+
 export default async function handler(
   req: NextApiRequest,
   res: NextApiResponse
@@ -29,21 +56,44 @@ export default async function handler(
   const { content, sourceUrl } = req.body
 
   if (!content || content.trim().length < 20) {
-    return res.status(400).json({ error: "内容太短，至少20字" })
+    return res.status(400).json({
+      error: "内容太短，至少20字。如果链接抓取失败，请手动复制视频文案粘贴到输入框。",
+    })
+  }
+
+  // 检测是否粘贴了 HTML 源码而非文案
+  const trimmed = content.trim()
+  if (
+    trimmed.startsWith("<!DOCTYPE") ||
+    trimmed.startsWith("<html") ||
+    (trimmed.includes("<div") && trimmed.includes("</div>") && trimmed.length > 500)
+  ) {
+    return res.status(400).json({
+      error: "检测到粘贴的是网页代码而非文案内容。请复制视频的文字描述/字幕，不要复制网页源码。",
+    })
   }
 
   try {
-    const prompt = `${CLASSIFY_PROMPT}\n\n${sourceUrl ? `来源链接：${sourceUrl}\n` : ""}内容：\n${content.trim().slice(0, 2000)}`
+    const prompt = `${CLASSIFY_PROMPT}\n\n${sourceUrl ? `来源链接：${sourceUrl}\n` : ""}内容：\n${trimmed.slice(0, 2000)}`
 
     const raw = await generateWithGemini(prompt)
 
-    // 提取 JSON
-    const jsonMatch = raw.match(/\{[\s\S]*\}/)
-    if (!jsonMatch) {
-      throw new Error("AI 返回格式异常，请重试")
+    const result = extractJson(raw)
+    if (!result) {
+      // 再试一次，用更强的指令
+      const retryPrompt = `${prompt}\n\n注意：只输出一行纯JSON，不要任何解释、不要markdown代码块、不要换行。`
+      const retryRaw = await generateWithGemini(retryPrompt)
+      const retryResult = extractJson(retryRaw)
+      if (!retryResult) {
+        throw new Error(`AI 返回格式异常，请重试。原始返回：${raw.slice(0, 100)}`)
+      }
+      return res.status(200).json({
+        type: retryResult.type || "故事型",
+        title: retryResult.title || "未命名",
+        summary: retryResult.summary || "",
+        sourceAuthor: retryResult.sourceAuthor || "",
+      })
     }
-
-    const result = JSON.parse(jsonMatch[0])
 
     return res.status(200).json({
       type: result.type || "故事型",

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react"
+import { useState } from "react"
 
 interface Topic {
   id: string
@@ -32,16 +32,46 @@ function saveTopics(topics: Topic[]) {
 }
 
 export default function ContentCollector() {
-  const [content, setContent] = useState("")
   const [sourceUrl, setSourceUrl] = useState("")
+  const [content, setContent] = useState("")
+  const [fetching, setFetching] = useState(false)
+  const [fetchHint, setFetchHint] = useState("")
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState("")
   const [result, setResult] = useState<AnalysisResult | null>(null)
   const [saved, setSaved] = useState(false)
 
+  const handleFetchUrl = async () => {
+    if (!sourceUrl.trim().startsWith("http")) {
+      setFetchHint("请输入完整链接（以 http 开头）")
+      return
+    }
+    setFetching(true)
+    setFetchHint("")
+    try {
+      const res = await fetch("/api/fetch-url", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ url: sourceUrl.trim() }),
+      })
+      const data = await res.json()
+
+      if (data.success && data.content) {
+        setContent(data.content)
+        setFetchHint("✅ " + data.hint)
+      } else {
+        setFetchHint("⚠️ " + data.hint)
+      }
+    } catch {
+      setFetchHint("⚠️ 网络错误，请手动粘贴文案")
+    } finally {
+      setFetching(false)
+    }
+  }
+
   const handleAnalyze = async () => {
     if (content.trim().length < 20) {
-      setError("内容太短，至少20字")
+      setError("内容太短，至少20字。如果链接抓取失败，请手动复制文案粘贴到输入框")
       return
     }
     setLoading(true)
@@ -92,6 +122,7 @@ export default function ContentCollector() {
     setSourceUrl("")
     setResult(null)
     setError("")
+    setFetchHint("")
   }
 
   const typeColors: Record<string, string> = {
@@ -103,29 +134,58 @@ export default function ContentCollector() {
 
   return (
     <div className="space-y-4">
-      {/* 输入区 */}
+      {/* 链接输入 + 抓取 */}
       <div className="p-4 bg-white border border-gray-200 rounded-xl space-y-3">
         <div>
           <label className="text-xs text-gray-500 mb-1 block">
-            粘贴小红书文案（或任何竞品文案）
+            粘贴抖音/小红书链接（优先尝试自动抓取）
           </label>
+          <div className="flex gap-2">
+            <input
+              value={sourceUrl}
+              onChange={(e) => setSourceUrl(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleFetchUrl()
+              }}
+              placeholder="如：https://v.douyin.com/xxxxx/ 或 https://www.xiaohongshu.com/explore/xxxxx"
+              className="flex-1 p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400 outline-none"
+            />
+            <button
+              onClick={handleFetchUrl}
+              disabled={fetching}
+              className="px-4 py-2.5 bg-gray-800 text-white text-sm font-medium rounded-lg hover:bg-gray-900 disabled:opacity-50 transition-colors whitespace-nowrap"
+            >
+              {fetching ? "抓取中..." : "抓取内容"}
+            </button>
+          </div>
+        </div>
+
+        {fetchHint && (
+          <div
+            className={`p-2.5 rounded-lg text-xs whitespace-pre-line ${
+              fetchHint.startsWith("✅")
+                ? "bg-green-50 border border-green-200 text-green-700"
+                : "bg-amber-50 border border-amber-200 text-amber-700"
+            }`}
+          >
+            {fetchHint}
+          </div>
+        )}
+
+        {/* 分割线 */}
+        <div className="flex items-center gap-3">
+          <div className="flex-1 border-t border-gray-200" />
+          <span className="text-xs text-gray-400">或手动粘贴</span>
+          <div className="flex-1 border-t border-gray-200" />
+        </div>
+
+        <div>
           <textarea
             value={content}
             onChange={(e) => setContent(e.target.value)}
-            placeholder="直接把竞品的小红书文案、抖音口播文案粘贴到这里……&#10;&#10;也支持直接粘贴小红书链接，手动把文案复制过来就行"
-            rows={8}
+            placeholder="直接把竞品的小红书文案、抖音口播文案粘贴到这里……"
+            rows={6}
             className="w-full p-3 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400 outline-none resize-none"
-          />
-        </div>
-        <div>
-          <label className="text-xs text-gray-500 mb-1 block">
-            来源链接（选填，方便回溯）
-          </label>
-          <input
-            value={sourceUrl}
-            onChange={(e) => setSourceUrl(e.target.value)}
-            placeholder="如：小红书链接、抖音链接"
-            className="w-full p-2.5 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-rose-400 focus:border-rose-400 outline-none"
           />
         </div>
 
@@ -183,10 +243,6 @@ export default function ContentCollector() {
             )}
           </div>
 
-          <p className="text-xs text-gray-400">
-            确认无误后点击"存入选题库"，可在选题库中查看和修改
-          </p>
-
           <button
             onClick={handleSave}
             className={`w-full py-2.5 rounded-xl text-sm font-medium transition-colors ${
@@ -203,9 +259,9 @@ export default function ContentCollector() {
       {/* 使用提示 */}
       <div className="p-3 bg-gray-100 rounded-xl">
         <p className="text-xs text-gray-500">
-          💡 <strong>使用方式：</strong>在小红书/抖音刷到竞品好的文案 →
-          复制粘贴到上方 → AI自动分类+提取标题摘要 → 确认后存入选题库 →
-          生脚本时参考使用
+          💡 <strong>方式一：</strong>粘贴链接 → 点"抓取内容"自动提取（抖音/小红书可能拦截，属正常现象）
+          <br />
+          💡 <strong>方式二：</strong>手动复制文案 → 粘贴到输入框 → 点"AI 分析分类" → 确认存入选题库
         </p>
       </div>
     </div>
