@@ -3,8 +3,9 @@ import ScriptForm from "../components/ScriptForm"
 import ScriptPreview from "../components/ScriptPreview"
 import WeekPlanner from "../components/WeekPlanner"
 import TopicLibrary from "../components/TopicLibrary"
+import ContentCollector from "../components/ContentCollector"
 
-type Tab = "script" | "week" | "topics"
+type Tab = "script" | "week" | "topics" | "collect"
 
 interface SavedScript {
   id: string
@@ -98,6 +99,7 @@ export default function Home() {
     { id: "script", label: "生脚本", emoji: "✍️" },
     { id: "week", label: "周计划", emoji: "📅" },
     { id: "topics", label: "选题库", emoji: "📚" },
+    { id: "collect", label: "竞品采集", emoji: "🔍" },
   ]
 
   return (
@@ -181,6 +183,7 @@ export default function Home() {
 
         {activeTab === "week" && <WeekPlanner />}
         {activeTab === "topics" && <TopicLibrary />}
+        {activeTab === "collect" && <ContentCollector />}
       </main>
     </div>
   )
