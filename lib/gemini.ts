@@ -18,7 +18,8 @@ let vertexToken: { token: string; expires: number } | null = null
 
 function getVertexAuth(): GoogleAuth {
   if (!vertexAuth) {
-    const key = JSON.parse(VERTEX_KEY_JSON)
+    const cleanJson = VERTEX_KEY_JSON.replace(/^﻿/, "")
+    const key = JSON.parse(cleanJson)
     vertexAuth = new GoogleAuth({
       credentials: key,
       scopes: ["https://www.googleapis.com/auth/cloud-platform"],
@@ -65,7 +66,8 @@ async function apiFetch(url: string, body: any, headers?: Record<string, string>
     const err = await res.text()
     throw new Error(`Gemini API 请求失败 (${res.status}): ${err}`)
   }
-  return res.json()
+  const text = await res.text()
+  return JSON.parse(text.replace(/^﻿/, ""))
 }
 
 async function tryModel(model: string, prompt: string): Promise<string> {
