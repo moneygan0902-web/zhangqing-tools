@@ -13,13 +13,19 @@ const API_BASE = "https://generativelanguage.googleapis.com/v1beta"
 // Vertex AI (服务账号方式)
 const VERTEX_LOCATION = "us-central1"
 
+// strip BOM from env vars (PowerShell piping may add it)
+function stripBom(s: string): string {
+  return s.replace(/^﻿/, "")
+}
+
+const VERTEX_PROJECT_CLEAN = stripBom(VERTEX_PROJECT)
+
 let vertexAuth: GoogleAuth | null = null
 let vertexToken: { token: string; expires: number } | null = null
 
 function getVertexAuth(): GoogleAuth {
   if (!vertexAuth) {
-    const cleanJson = VERTEX_KEY_JSON.replace(/^﻿/, "")
-    const key = JSON.parse(cleanJson)
+    const key = JSON.parse(stripBom(VERTEX_KEY_JSON))
     vertexAuth = new GoogleAuth({
       credentials: key,
       scopes: ["https://www.googleapis.com/auth/cloud-platform"],
@@ -76,7 +82,7 @@ async function tryModel(model: string, prompt: string): Promise<string> {
 
   if (useVertex) {
     const token = await getVertexToken()
-    url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT}/locations/${VERTEX_LOCATION}/publishers/google/models/${model}:generateContent`
+    url = `https://${VERTEX_LOCATION}-aiplatform.googleapis.com/v1/projects/${VERTEX_PROJECT_CLEAN}/locations/${VERTEX_LOCATION}/publishers/google/models/${model}:generateContent`
     headers = { Authorization: `Bearer ${token}` }
   } else {
     url = `${API_BASE}/models/${model}:generateContent?key=${API_KEY}`
@@ -101,7 +107,7 @@ export async function generateWithGemini(prompt: string): Promise<string> {
   if (!useVertex && !API_KEY) {
     throw new Error("请在环境变量中设置 GEMINI_API_KEY 或 GEMINI_VERTEX_KEY")
   }
-  if (useVertex && !VERTEX_PROJECT) {
+  if (useVertex && !VERTEX_PROJECT_CLEAN) {
     throw new Error("请在环境变量中设置 GEMINI_PROJECT_ID")
   }
 
