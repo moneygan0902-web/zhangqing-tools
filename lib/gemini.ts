@@ -88,8 +88,12 @@ async function tryModel(model: string, prompt: string): Promise<string> {
     url = `${API_BASE}/models/${model}:generateContent?key=${API_KEY}`
   }
 
+  const contents = useVertex
+    ? [{ role: "user", parts: [{ text: prompt }] }]
+    : [{ parts: [{ text: prompt }] }]
+
   const data = await apiFetch(url, {
-    contents: [{ parts: [{ text: prompt }] }],
+    contents,
     generationConfig: {
       temperature: 0.7,
       maxOutputTokens: 6144,
